@@ -13,6 +13,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
 class TestJSLeakHunter(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        os.environ["JSLEAKHUNTER_ALLOW_LOCAL"] = "1"
         cls.old = os.getcwd()
         cls.tmp = tempfile.TemporaryDirectory()
         root = cls.tmp.name
@@ -51,6 +52,7 @@ class TestJSLeakHunter(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        os.environ.pop("JSLEAKHUNTER_ALLOW_LOCAL", None)
         cls.server.shutdown()
         cls.server.server_close()
         os.chdir(cls.old)
@@ -149,6 +151,75 @@ class TestJSLeakHunter(unittest.TestCase):
         with self.assertRaises(requests.RequestException):
             js.get_js_files("http://127.0.0.1:9999/nonexistent")
 
+    # 11. Security & SSRF Protection Tests
+    def test_ssrf_loopback_blocked(self):
+        with self.assertRaises(ValueError) as ctx:
+            js.validate_url_target("http://127.0.0.1:8080", allow_local=False)
+        self.assertIn("SSRF Protection", str(ctx.exception))
+
+    def test_ssrf_localhost_blocked(self):
+        with self.assertRaises(ValueError) as ctx:
+            js.validate_url_target("http://localhost:3000", allow_local=False)
+        self.assertIn("SSRF Protection", str(ctx.exception))
+
+    def test_ssrf_private_ip_10_blocked(self):
+        with self.assertRaises(ValueError) as ctx:
+            js.validate_url_target("http://10.0.1.5:8080", allow_local=False)
+        self.assertIn("SSRF Protection", str(ctx.exception))
+
+    def test_ssrf_private_ip_192_blocked(self):
+        with self.assertRaises(ValueError) as ctx:
+            js.validate_url_target("http://192.168.1.1", allow_local=False)
+        self.assertIn("SSRF Protection", str(ctx.exception))
+
+    def test_ssrf_cloud_metadata_blocked(self):
+        with self.assertRaises(ValueError) as ctx:
+            js.validate_url_target("http://169.254.169.254/latest/meta-data/", allow_local=False)
+        self.assertIn("SSRF Protection", str(ctx.exception))
+
+    def test_ssrf_prohibited_schemes(self):
+        for bad_url in ["file:///etc/passwd", "gopher://127.0.0.1:11211", "ftp://example.com"]:
+            with self.assertRaises(ValueError) as ctx:
+                js.validate_url_target(bad_url, allow_local=False)
+            self.assertIn("Prohibited URL scheme", str(ctx.exception))
+
+    def test_per_resource_findings_structure(self):
+        findings = js.scan_js(f"{self.url}/app.js")
+        file_findings = {cat: sorted(list(findings.get(cat, set()))) for cat in js.PATTERNS}
+        self.assertIn("Email", file_findings)
+        self.assertIn("JWT", file_findings)
+        self.assertIn("AWS Key", file_findings)
+        self.assertIn("Internal IP", file_findings)
+        self.assertIn("API Endpoint", file_findings)
+        self.assertEqual(len(file_findings["Email"]), 1)
+        self.assertEqual(len(file_findings["JWT"]), 1)
+        self.assertEqual(len(file_findings["AWS Key"]), 1)
+
+    def test_api_scan_handler_integration(self):
+        # Spin up JSLeakHunterHandler on dynamic port
+        api_server = ThreadingHTTPServer(('127.0.0.1', 0), js.JSLeakHunterHandler)
+        api_thread = threading.Thread(target=api_server.serve_forever, daemon=True)
+        api_thread.start()
+        api_url = f'http://127.0.0.1:{api_server.server_port}'
+        try:
+            # Query the /api/scan endpoint targeting our local test site
+            resp = requests.get(f"{api_url}/api/scan?url={self.url}", timeout=10)
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "success")
+            self.assertEqual(data["target"], self.url)
+            self.assertIn("js_files", data)
+            self.assertIn("findings", data)
+            self.assertIn("total_findings", data)
+            self.assertIn("resources", data)
+            self.assertEqual(len(data["resources"]), 1)
+            self.assertEqual(data["resources"][0]["url"], f"{self.url}/app.js")
+            self.assertIn("Email", data["resources"][0]["findings"])
+            self.assertIn("test@example.com", data["resources"][0]["findings"]["Email"])
+            self.assertGreater(data["total_findings"], 0)
+        finally:
+            api_server.shutdown()
+            api_server.server_close()
+
 if __name__ == '__main__':
     unittest.main()
-
