@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSLeakHunter - JavaScript Exposure Scanner</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --primary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            --accent-color: #00f2fe;
+            --accent-glow: rgba(0, 242, 254, 0.15);
+            --card-bg: rgba(15, 22, 36, 0.45);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 242, 254, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(79, 172, 254, 0.05) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 2rem 1rem;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism panel styles */
+        .glass-panel {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            padding: 2rem;
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Header UI */
+        .header-section {
+            text-align: center;
+            margin-bottom: 2rem;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .brand-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.05em;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+        }
+
+        .brand-subtitle {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--text-main);
+            margin-bottom: 0.5rem;
+        }
+
+        .brand-desc {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 1.5rem auto;
+            line-height: 1.5;
+        }
+
+        .auth-banner {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 8px;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.85rem;
+            color: #fca5a5;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            max-width: 650px;
+            margin: 0 auto;
+        }
+
+        .auth-banner-title {
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Target URL Section */
+        .scan-form {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 280px;
+            position: relative;
+        }
+
+        .url-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 0.9rem 1.2rem;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        .url-input:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .btn-scan {
+            background: var(--primary-gradient);
+            border: none;
+            color: #0b0f19;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 0.9rem 2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            min-width: 150px;
+        }
+
+        .btn-scan:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4);
+        }
+
+        .btn-scan:active {
+            transform: translateY(0);
+        }
+
+        .btn-scan:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Status panel */
+        .status-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .status-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .status-badge {
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .status-ready { background: rgba(156, 163, 175, 0.1); color: var(--text-muted); border: 1px solid rgba(156, 163, 175, 0.2); }
+        .status-scanning { background: rgba(245, 158, 11, 0.1); color: var(--warning-color); border: 1px solid rgba(245, 158, 11, 0.2); }
+        .status-complete { background: rgba(16, 185, 129, 0.1); color: var(--success-color); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .status-failed { background: rgba(239, 68, 68, 0.1); color: var(--error-color); border: 1px solid rgba(239, 68, 68, 0.2); }
+
+        /* Summary statistics grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-2px);
+        }
+
+        .stat-val {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0.25rem;
+            color: #fff;
+        }
+
+        .stat-val.highlight {
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        /* Findings cards section */
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .findings-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 768px) {
+            .findings-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .finding-card {
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 14px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            transition: all 0.3s;
+        }
+
+        .finding-card:hover {
+            border-color: rgba(0, 242, 254, 0.2);
+            background: rgba(255, 255, 255, 0.03);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .finding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .finding-title-box {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .finding-icon {
+            font-size: 1.2rem;
+            color: var(--accent-color);
+        }
+
+        .finding-count {
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 0.2rem 0.6rem;
+            border-radius: 10px;
+            color: var(--text-muted);
+        }
+
+        .finding-count.has-findings {
+            background: rgba(0, 242, 254, 0.15);
+            color: var(--accent-color);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+        }
+
+        .finding-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            overflow-y: auto;
+            max-height: 180px;
+            padding-right: 0.25rem;
+        }
+
+        .finding-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .finding-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .finding-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .finding-item {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            word-break: break-all;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+            color: #e5e7eb;
+        }
+
+        .finding-empty {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.85rem;
+            margin: auto;
+            padding: 1rem 0;
+            text-align: center;
+        }
+
+        /* JS Files listing and Details summary */
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 768px) {
+            .details-grid {
+                grid-template-columns: 3fr 2fr;
+            }
+        }
+
+        .js-resources-box {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            padding: 1.25rem;
+            height: fit-content;
+        }
+
+        .js-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .js-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 0.6rem 0.8rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            word-break: break-all;
+        }
+
+        .js-check {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+
+        .summary-table-box {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .summary-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .summary-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: #d1d5db;
+        }
+
+        .summary-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .summary-total-row {
+            font-weight: 700;
+            color: #fff !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+        }
+
+        /* Error modal/card style */
+        .error-card {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: none;
+            width: 100%;
+            max-width: 1000px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .error-title {
+            color: #fecaca;
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .error-desc {
+            color: #fca5a5;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(11, 15, 25, 0.3);
+            border-top: 2px solid #0b0f19;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Section -->
+    <div class="header-section">
+        <h1 class="brand-title">JSLeakHunter</h1>
+        <h2 class="brand-subtitle">JavaScript Exposure Scanner</h2>
+        <p class="brand-desc">
+            A static scanner that parses public HTML endpoints to identify potential security exposures, configurations, and sensitive indicators embedded inside referenced client-side JavaScript assets.
+        </p>
+        <div class="auth-banner">
+            <span class="auth-banner-title">⚠️ Authorized Use Only:</span>
+            <span>Scan only websites and resources that you own or have explicit permission to assess.</span>
+        </div>
+    </div>
+
+    <!-- Target URL Card -->
+    <div class="glass-panel">
+        <h3 class="section-title">🎯 Scan Scope Target</h3>
+        <form id="scanForm" class="scan-form">
+            <div class="input-group">
+                <input type="text" id="targetUrl" class="url-input" placeholder="Enter target URL (e.g., http://127.0.0.1:8000)..." required>
+            </div>
+            <button type="submit" id="btnScan" class="btn-scan">
+                <span class="spinner" id="btnSpinner"></span>
+                <span id="btnText">Start Scan</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Error Card -->
+    <div id="errorCard" class="error-card">
+        <h4 class="error-title">❌ Scan Failed</h4>
+        <p id="errorDesc" class="error-desc">Unable to reach the target website. Please check the URL and try again.</p>
+    </div>
+
+    <!-- Main Results Dashboard Container -->
+    <div id="resultsDashboard" class="glass-panel" style="display: none;">
+        <!-- Status Container -->
+        <div class="status-container">
+            <div>
+                <span class="status-label">Engine Status</span>
+                <div style="font-size: 0.9rem; font-weight: 500; margin-top: 0.2rem; color: #fff;" id="targetDisplay">Scope: None</div>
+            </div>
+            <div class="status-badge status-ready" id="statusBadge">
+                <span id="statusBadgeText">Ready to scan</span>
+            </div>
+        </div>
+
+        <!-- Metric Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-title">JavaScript Files</div>
+                <div class="stat-val highlight" id="statJsFiles">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Total Findings</div>
+                <div class="stat-val" id="statTotalFindings" style="color: var(--accent-color);">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Scan Status</div>
+                <div class="stat-val" id="statStatusText" style="font-size: 1.5rem; padding-top: 0.5rem; font-weight: 600;">Idle</div>
+            </div>
+        </div>
+
+        <!-- 5 Category Findings Cards -->
+        <h3 class="section-title" style="margin-top: 2rem;">🛡️ Exposure Findings</h3>
+        <div class="findings-grid">
+            <!-- Email -->
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title-box">
+                        <span class="finding-icon">✉</span> Email
+                    </span>
+                    <span class="finding-count" id="countEmail">0</span>
+                </div>
+                <ul class="finding-list" id="listEmail">
+                    <li class="finding-empty">No potential findings detected</li>
+                </ul>
+            </div>
+
+            <!-- JWT -->
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title-box">
+                        <span class="finding-icon">🔑</span> JWT
+                    </span>
+                    <span class="finding-count" id="countJWT">0</span>
+                </div>
+                <ul class="finding-list" id="listJWT">
+                    <li class="finding-empty">No potential findings detected</li>
+                </ul>
+            </div>
+
+            <!-- AWS Key -->
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title-box">
+                        <span class="finding-icon">☁</span> AWS Key
+                    </span>
+                    <span class="finding-count" id="countAWSKey">0</span>
+                </div>
+                <ul class="finding-list" id="listAWSKey">
+                    <li class="finding-empty">No potential findings detected</li>
+                </ul>
+            </div>
+
+            <!-- Internal IP -->
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title-box">
+                        <span class="finding-icon">🖥</span> Internal IP
+                    </span>
+                    <span class="finding-count" id="countInternalIP">0</span>
+                </div>
+                <ul class="finding-list" id="listInternalIP">
+                    <li class="finding-empty">No potential findings detected</li>
+                </ul>
+            </div>
+
+            <!-- API Endpoint -->
+            <div class="finding-card" style="grid-column: span 1;">
+                <div class="finding-header">
+                    <span class="finding-title-box">
+                        <span class="finding-icon">🔗</span> API Endpoint
+                    </span>
+                    <span class="finding-count" id="countAPIEndpoint">0</span>
+                </div>
+                <ul class="finding-list" id="listAPIEndpoint">
+                    <li class="finding-empty">No potential findings detected</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Resources & Summary -->
+        <div class="details-grid">
+            <div class="js-resources-box">
+                <h3 class="section-title">📄 JavaScript Resources</h3>
+                <ul class="js-list" id="jsResourcesList">
+                    <li class="finding-empty">No resources discovered</li>
+                </ul>
+            </div>
+
+            <div class="summary-table-box">
+                <h3 class="section-title">📊 Detection Summary</h3>
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th style="text-align: right;">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>✉ Email</td>
+                            <td style="text-align: right;" id="tblEmail">0</td>
+                        </tr>
+                        <tr>
+                            <td>🔑 JWT</td>
+                            <td style="text-align: right;" id="tblJWT">0</td>
+                        </tr>
+                        <tr>
+                            <td>☁ AWS Key</td>
+                            <td style="text-align: right;" id="tblAWSKey">0</td>
+                        </tr>
+                        <tr>
+                            <td>🖥 Internal IP</td>
+                            <td style="text-align: right;" id="tblInternalIP">0</td>
+                        </tr>
+                        <tr>
+                            <td>🔗 API Endpoint</td>
+                            <td style="text-align: right;" id="tblAPIEndpoint">0</td>
+                        </tr>
+                        <tr class="summary-total-row">
+                            <td>Total Findings</td>
+                            <td style="text-align: right;" id="tblTotal">0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const scanForm = document.getElementById('scanForm');
+        const targetUrlInput = document.getElementById('targetUrl');
+        const btnScan = document.getElementById('btnScan');
+        const btnSpinner = document.getElementById('btnSpinner');
+        const btnText = document.getElementById('btnText');
+        const errorCard = document.getElementById('errorCard');
+        const errorDesc = document.getElementById('errorDesc');
+        const resultsDashboard = document.getElementById('resultsDashboard');
+
+        // Status elements
+        const statusBadge = document.getElementById('statusBadge');
+        const statusBadgeText = document.getElementById('statusBadgeText');
+        const targetDisplay = document.getElementById('targetDisplay');
+        const statJsFiles = document.getElementById('statJsFiles');
+        const statTotalFindings = document.getElementById('statTotalFindings');
+        const statStatusText = document.getElementById('statStatusText');
+
+        // Categories mapping
+        const categories = {
+            'Email': { count: 'countEmail', list: 'listEmail', tbl: 'tblEmail' },
+            'JWT': { count: 'countJWT', list: 'listJWT', tbl: 'tblJWT' },
+            'AWS Key': { count: 'countAWSKey', list: 'listAWSKey', tbl: 'tblAWSKey' },
+            'Internal IP': { count: 'countInternalIP', list: 'listInternalIP', tbl: 'tblInternalIP' },
+            'API Endpoint': { count: 'countAPIEndpoint', list: 'listAPIEndpoint', tbl: 'tblAPIEndpoint' }
+        };
+
+        scanForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            let targetUrl = targetUrlInput.value.trim();
+            if (!targetUrl) return;
+
+            // Reset UI states
+            errorCard.style.display = 'none';
+            resultsDashboard.style.display = 'block';
+            
+            // Set scanning state
+            btnScan.disabled = true;
+            btnSpinner.style.display = 'inline-block';
+            btnText.textContent = 'Scanning...';
+
+            statusBadge.className = 'status-badge status-scanning';
+            statusBadgeText.textContent = 'Scanning...';
+            targetDisplay.textContent = `Scope: ${targetUrl}`;
+            statStatusText.textContent = 'Scanning';
+            statStatusText.style.color = 'var(--warning-color)';
+
+            // Reset all counters and lists
+            statJsFiles.textContent = '0';
+            statTotalFindings.textContent = '0';
+            document.getElementById('tblTotal').textContent = '0';
+            document.getElementById('jsResourcesList').innerHTML = '<li class="finding-empty">Searching resources...</li>';
+
+            for (const cat in categories) {
+                document.getElementById(categories[cat].count).textContent = '0';
+                document.getElementById(categories[cat].count).classList.remove('has-findings');
+                document.getElementById(categories[cat].list).innerHTML = '<li class="finding-empty">No potential findings detected</li>';
+                document.getElementById(categories[cat].tbl).textContent = '0';
+            }
+
+            try {
+                // Trigger python scan endpoint
+                const response = await fetch(`/api/scan?url=${encodeURIComponent(targetUrl)}`);
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Populate findings
+                    statJsFiles.textContent = data.js_files.length;
+                    statTotalFindings.textContent = data.total_findings;
+                    document.getElementById('tblTotal').textContent = data.total_findings;
+
+                    // Update resources list
+                    const jsList = document.getElementById('jsResourcesList');
+                    if (data.js_files.length > 0) {
+                        jsList.innerHTML = data.js_files.map(url => `
+                            <li class="js-item">
+                                <span class="js-check">✓</span>
+                                <span>${url}</span>
+                            </li>
+                        `).join('');
+                    } else {
+                        jsList.innerHTML = '<li class="finding-empty">No JavaScript files found</li>';
+                    }
+
+                    // Update category findings
+                    for (const cat in categories) {
+                        const items = data.findings[cat] || [];
+                        const countEl = document.getElementById(categories[cat].count);
+                        const listEl = document.getElementById(categories[cat].list);
+                        const tblEl = document.getElementById(categories[cat].tbl);
+
+                        countEl.textContent = items.length;
+                        tblEl.textContent = items.length;
+
+                        if (items.length > 0) {
+                            countEl.classList.add('has-findings');
+                            listEl.innerHTML = items.map(val => `<li class="finding-item">${escapeHtml(val)}</li>`).join('');
+                        } else {
+                            listEl.innerHTML = '<li class="finding-empty">No potential findings detected</li>';
+                        }
+                    }
+
+                    // Scan complete
+                    statusBadge.className = 'status-badge status-complete';
+                    statusBadgeText.textContent = 'Scan Complete';
+                    statStatusText.textContent = 'Complete';
+                    statStatusText.style.color = 'var(--success-color)';
+
+                } else {
+                    // Scan failed response from python backend
+                    showError(data.message || 'Scan failed due to an internal error.');
+                }
+            } catch (err) {
+                showError('Unable to connect to the scanning service backend.');
+            } finally {
+                btnScan.disabled = false;
+                btnSpinner.style.display = 'none';
+                btnText.textContent = 'Start Scan';
+            }
+        });
+
+        function showError(message) {
+            errorDesc.textContent = message;
+            errorCard.style.display = 'block';
+            
+            statusBadge.className = 'status-badge status-failed';
+            statusBadgeText.textContent = 'Scan Failed';
+            statStatusText.textContent = 'Failed';
+            statStatusText.style.color = 'var(--error-color)';
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>
