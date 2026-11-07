@@ -173,3 +173,4 @@ OK
 ## Legal & Ethical Disclaimer
 
 JSLeakHunter is designed strictly for **passive reconnaissance and defensive auditing**. Only analyze assets and web applications that you own or have explicit, prior written permission to test.
+

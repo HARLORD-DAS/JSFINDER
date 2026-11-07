@@ -16,9 +16,17 @@ from collections import defaultdict
 from urllib.parse import urljoin, urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import requests
+import urllib3
 from bs4 import BeautifulSoup
 
-HEADERS = {"User-Agent": "JSLeakHunter/2.0 (Security-Audit-Scanner)"}
+# Suppress insecure request warnings for robust scanning of targets with self-signed SSL
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/javascript,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 CONNECT_TIMEOUT = 5
 READ_TIMEOUT = 10
 TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
@@ -129,7 +137,8 @@ def safe_fetch(url: str, max_size: int = MAX_PAGE_SIZE, allow_local: bool = Fals
                 headers=HEADERS,
                 timeout=TIMEOUT,
                 stream=True,
-                allow_redirects=False
+                allow_redirects=False,
+                verify=False
             )
         except requests.RequestException as exc:
             raise requests.RequestException(f"Failed to connect to {current_url}: {exc}")
@@ -212,6 +221,16 @@ def normalize_url(url: str) -> str:
     return "https://" + url
 
 class JSLeakHunterHandler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+        super().end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.end_headers()
+
     def log_message(self, format, *args):
         sys.stdout.write("%s - - [%s] %s\n" % (self.address_string(), self.log_date_time_string(), format % args))
 
@@ -340,9 +359,10 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
 def start_web_ui(port=5000):
-    server = ReusableThreadingHTTPServer(("127.0.0.1", port), JSLeakHunterHandler)
+    host = "0.0.0.0"
+    server = ReusableThreadingHTTPServer((host, port), JSLeakHunterHandler)
     url = f"http://127.0.0.1:{port}"
-    print(f"\n[+] Starting JSLeakHunter Engine at {url}")
+    print(f"\n[+] Starting JSLeakHunter Engine at http://127.0.0.1:{port} (and http://localhost:{port})")
     print("[+] Press Ctrl+C to stop the server.")
 
     if os.environ.get("JSLEAKHUNTER_NO_BROWSER", "") != "1":

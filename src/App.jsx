@@ -29,13 +29,24 @@ const saveHistory = hist => {
 
 async function fetchScanApi(targetUrl) {
   let response
+  const queryParam = '?url=' + encodeURIComponent(targetUrl)
+
+  // 1. Try same-origin relative path first (used in production or via Vite dev proxy)
   try {
-    response = await fetch('/api/scan?url=' + encodeURIComponent(targetUrl))
-  } catch (netErr) {
-    throw new Error(
-      'Unable to connect to the JSLeakHunter Python backend at /api/scan. ' +
-      'Please ensure the backend is running (`python js.py --web`) on http://127.0.0.1:5000.'
-    )
+    response = await fetch('/api/scan' + queryParam)
+    if (!response.ok && response.status === 404) {
+      throw new Error('Endpoint 404')
+    }
+  } catch {
+    // 2. Direct fallback to Python backend server on port 5000 (with CORS support)
+    try {
+      response = await fetch('http://127.0.0.1:5000/api/scan' + queryParam)
+    } catch {
+      throw new Error(
+        'Unable to connect to the JSLeakHunter Python backend. ' +
+        'Please ensure the backend is running (`python js.py --web 5000`) on http://127.0.0.1:5000.'
+      )
+    }
   }
 
   let data
