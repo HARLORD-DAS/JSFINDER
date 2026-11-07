@@ -231,3 +231,4 @@ export default function ResourceExplorer({ res, onCopy }) {
     </section>
   )
 }
+

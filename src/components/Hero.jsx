@@ -195,3 +195,4 @@ export default function Hero({ onScan, loading, error, inputRef }) {
     </section>
   )
 }
+

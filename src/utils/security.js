@@ -119,3 +119,4 @@ export const CATEGORY_INFO = {
     description: 'Hardcoded developer or corporate email addresses can be targeted for credential stuffing or phishing.'
   }
 }
+

@@ -334,3 +334,4 @@ function FindingCard({ item, isExpanded, isCopied, onToggleExpand, onCopy }) {
     </motion.div>
   )
 }
+

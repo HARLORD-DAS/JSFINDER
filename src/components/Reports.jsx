@@ -217,3 +217,4 @@ export default function Reports({ res, onNotify }) {
     </section>
   )
 }
+
