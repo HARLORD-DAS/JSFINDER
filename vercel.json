@@ -1,0 +1,14 @@
+{
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/scan",
+      "destination": "/api/scan.py"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
+}
+
